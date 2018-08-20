@@ -1,0 +1,23 @@
+ 
+ALIVE.EXE : Ping utility that returns ERRORLEVEL : by Steven Wettberg
+ 
+Usage: ALIVE [/REPEAT=#] [/TIMEOUT=SECONDS] [ADDRESS OR HOSTNAME]
+ 
+ALIVE pings the specified host and returns an ERRORLEVEL indicating success
+or the reason for failure. /REPEAT and /TIMEOUT are optional parameters, 
+the default REPEAT (# of attempts) value is 5 and the default TIMEOUT is 4
+seconds. The program will terminate with an ERRORLEVEL 0 when it senses a 
+successful ping regardless of the /REPEAT value.
+ 
+Example: ALIVE /Repeat=8 /Timeout=3 host.somewhere.com
+ 
+      Request timed out                   : ERRORLEVEL 1
+      Destination host unreachable        : ERRORLEVEL 2
+      Destination network unreachable     : ERRORLEVEL 3
+      Destination protocol unreachable    : ERRORLEVEL 4
+      Destination port unreachable        : ERRORLEVEL 5
+      Hardware error                      : ERRORLEVEL 6
+      TTL expired in transit              : ERRORLEVEL 7
+      Bad Destination                     : ERRORLEVEL 8
+      Other errors                        : ERRORLEVEL 255
+ 

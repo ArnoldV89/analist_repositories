@@ -1,0 +1,132 @@
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' "check_ram.wsf"
+' nagios@samurai.inka.de
+'
+' 20.05.2011 ver 0.2 (Ariel Torres)
+'
+' 16.08.2006 ver 0.2p (Ciro Iriarte - ciriarte@personal.net.py)
+' Added performance data output
+' objItem.TotalPhysicalMemory divided by 1015 instead of 1000
+'
+' 04.01.2004 ver 0.2
+' Modified the WMI queries to be compatible with windows 2000 API
+' Modified the output to resemble the nsclient memory check 
+'
+' 02.06.2003 ver 0.1
+' WMI query works but is far away from the way I wan't it
+' 
+' --------------------------------------------------------------
+' This plugin will return memory usage statistics.
+'
+
+<job>
+<runtime>
+  <description>
+check_ram (nrpe_nt-plugin) 1.1
+The nagios plugins come with ABSOLUTELY NO WARRANTY. You may redistribute
+copies of the plugins under the terms of the GNU General Public License.
+For more information about these matters, see the file named COPYING.
+Copyright (c) 1999-2001 Ethan Galstad/Hagen Deike (nagios@samurai.inka.de)
+
+This plugin will return memory usage statistics.
+  </description>
+  <named
+    name="h"
+    helpstring="Help"
+    type="simple"
+    required="false" 
+  />
+  <named
+    name="w"
+    helpstring="Warning watermark. Must be lower than critical"
+    type="string"
+    required="true"
+  />
+  <named
+    name="c"
+    helpstring="Critical watermark. Must be higher than warning"
+    type="string"
+    required="true"
+  />
+  <named
+    name="p"
+    helpstring="Output performance data"
+    type="simple"
+    required="false"
+  />
+  <example>
+Example: Framework.wsf /w:60 /c:90
+  </example>
+</runtime>
+<script language="VBScript">
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' Const's and Var's
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Cons for return val's
+Const intOK = 0
+Const intWarning = 1
+Const intCritical = 2
+Const intUnknown = 3
+
+' Cons for FSO
+Const ForReading = 1
+Const ForWriting = 2
+
+intMemorySum = 0
+intTotalMemory = 1
+intPercentUsed = 0
+'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' Help
+'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+  If Wscript.Arguments.Named.Exists("h") Or Not Wscript.Arguments.Named.Exists("w") Or Not Wscript.Arguments.Named.Exists("c") Or CLng(Wscript.Arguments.Named("w")) >= CLng(Wscript.Arguments.Named("c")) Then
+	Wscript.Echo "Plugin help screen:"
+      Wscript.Arguments.ShowUsage()
+      Wscript.Quit(intUnknown)
+  End If
+'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' Main
+'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+Set objWMIService = GetObject("winmgmts:{impersonationLevel=impersonate}!\root\cimv2")
+'Get the available memory in MB
+
+Set colItems = objWMIService.ExecQuery("Select * from Win32_PerfRawData_PerfOS_Memory",,48)
+For Each objItem in colItems 
+      intMemorySum = objItem.AvailableMBytes
+      
+Next 
+'Get the total memory
+
+Set colItems = objWMIService.ExecQuery("Select * from Win32_ComputerSystem",,48)
+For Each objItem in colItems 
+      'intTotalMemory = objItem.TotalPhysicalMemory /1000 \ 1
+      'intTotalMemory = objItem.TotalPhysicalMemory /1015 \1
+	intTotalMemory = Int( ( objItem.TotalPhysicalMemory / 1048576 ) + 0.5 ) \1
+
+Next
+
+
+
+
+'Determine the percent used rounded to nearst percent
+intPercentUsed = (intTotalMemory - intMemorySum) / intTotalMemory * 100 \ 1
+'Print the output to screen
+
+If Wscript.Arguments.Named.Exists("p") Then
+	Wscript.Echo "Memory usage: total: " & intTotalMemory & " MB - used: " & intTotalMemory - intMemorySum & " MB (" & intPercentUsed & "%) - free: " & intMemorySum & " MB (" & 100 - intPercentUsed & "%)|ram_used=" & intTotalMemory - intMemorySum &"MB;" & (intTotalMemory*CLng(Wscript.Arguments.Named("w"))/100) &";" &(intTotalMemory*CLng(Wscript.Arguments.Named("c"))/100) &";0;" &intTotalMemory
+Else
+	Wscript.Echo "Memory usage: total: " & intTotalMemory & " MB - used: " & intTotalMemory - intMemorySum & " MB (" & intPercentUsed & "%) - free: " & intMemorySum & " MB (" & 100 - intPercentUsed & "%)"	
+End If
+
+
+If CLng(intPercentUsed) >= CLng(Wscript.Arguments.Named("c")) Then
+	Wscript.Quit(intCritical)
+Elseif CLng(intPercentUsed) >= CLng(Wscript.Arguments.Named("w")) Then
+	Wscript.Quit(intWarning)
+End If
+	Wscript.Quit(intOK)
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+</script>
+</job>

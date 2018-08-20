@@ -1,0 +1,149 @@
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' "check_fileage.wsf"
+' nagios@samurai.inka.de
+'
+' 28.05.2003 ver 1.0
+' Added Arguments processing
+' Bugfixes
+'
+' 02.06.2003 ver 1.1
+' Changed argument processing to XML Elements
+' 
+' 16.08.2006 ver 1.1p (Ciro Iriarte - ciriarte@personal.net.py)
+' Fixed typo in output
+' Added performance data
+'
+' --------------------------------------------------------------
+' This script checks a file if the motified date is
+' older than a given time.
+'
+
+<job>
+<runtime>
+  <description>
+check_fileage (nrpe_nt-plugin) 1.1
+The nagios plugins come with ABSOLUTELY NO WARRANTY. You may redistribute
+copies of the plugins under the terms of the GNU General Public License.
+For more information about these matters, see the file named COPYING.
+Copyright (c) 1999-2001 Ethan Galstad/Hagen Deike (nagios@samurai.inka.de)
+
+Compares the last modified date of a given file with
+the checking intervall to see if the file has changed
+between the last and the actual query.
+  </description>
+  <named
+    name="h"
+    helpstring="Help"
+    type="simple"
+    required="false" 
+  />
+  <unnamed
+    name="filename"
+    helpstring="Path to the file you wish to watch"
+    many="false"
+    required="true"
+  />
+  <named
+    name="p"
+    helpstring="Output performance data"
+    type="simple"
+    required="false"
+  />
+  <example>
+Example: check_fileage.wsf c:\winnt\system32\LogFiles\W3SCV1\ex0001.log
+</example>
+</runtime>
+<script language="VBScript">
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+'  If Wscript.Arguments.Named.Exists("h") Then
+  If Wscript.Arguments.Named.Exists("h") Or Wscript.Arguments.Count = 0 Then
+	Wscript.Echo "Plugin help screen:"
+      Wscript.Arguments.ShowUsage()
+      Wscript.Quit(0)
+  End If
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' Const's and Var's
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+strTempFile = "~check_fileage.temp" 'Name of the temp file
+strFile = Wscript.Arguments.Unnamed.Item(0)
+
+Const intOK = 0
+Const intWarning = 1
+Const intCritical = 2
+Const intUnknown = 3
+
+Const ForReading = 1
+Const ForWriting = 2
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+' Create Filesystem Objekt
+Dim objFSO
+Set objFSO = CreateObject("Scripting.FileSystemObject")
+
+If objFSO.FileExists(strFile) Then ' does the file exsit?
+  Set objFile = objFSO.GetFile(strFile) 'Get Path to file
+
+' Get the date the plugin was executed the last time
+  Dim objDateLastCheck, objFileAttribute
+  If objFSO.FileExists(strTempFile) Then 'does the temp file exist?
+    Set objDateLastCheck = objFSO.OpenTextFile(strTempFile, ForReading)
+    strDateLastCheck = objDateLastCheck.Readline
+    objDateLastCheck.Close
+
+      'Calc the Interval
+      strInterval = DateDiff("n", strDateLastCheck, Now)
+      If strInterval = 0 Then 'If the time is less than a minute make sure that it's not 0
+        strInterval = strInterval + 1
+      End If
+
+    'Write the new Date to the file
+    Set objDateLastCheck = objFSO.OpenTextFile(strTempFile, ForWriting, True) 
+    objDateLastCheck.WriteLine(Now)
+    objDateLastCheck.Close
+    
+  Else
+    Set objDateLastCheck = objFSO.OpenTextFile(strTempFile, ForWriting, True)
+    objDateLastCheck.WriteLine(Now)
+    objDateLastCheck.Close
+
+'    Set objFileAttribute = objFSO.GetFile(strTempFile)
+'    objFileAttribute.Attributes = objFileAttribute.Attributes + 2 'Hide file
+    
+    Wscript.Echo "Temp file wasn't present. Needed to be created first..."
+    Wscript.Quit(intUnknown) 'Quit with a unknown Status
+  End if
+''''''''''''''
+  
+  Dim fileDate
+  fileDate = objFile.DateLastModified 'Get motified property of file
+
+  If DateAdd("n", strInterval, fileDate) < Now() Then 'add strInterval as minutes and compare with now time
+'   The file is older then the given minutes...
+	If Wscript.Arguments.Named.Exists("p") Then
+		Wscript.Echo "CRITICAL: File is too old... The file "& strFile &" Is older than "& strInterval &" minutes.|fileage="& strInterval*60 &"s;;;;;"
+	Else
+		Wscript.Echo "CRITICAL: File is too old... The file "& strFile &" Is older than "& strInterval &" minutes."
+	End If
+    Wscript.Quit(intCritical) 'Quit with a critical error
+
+  End If
+
+Else
+   Wscript.Echo "CRITICAL: File does not exist... The file "& strFile &" was Not found."
+   Wscript.Quit(intCritical) 'Quit with a critical error
+
+End If
+
+If Wscript.Arguments.Named.Exists("p") Then
+	Wscript.Echo "Fileage OK - File is "& DateDiff("n", fileDate, Now) &" minutes old. (Last modified: "& fileDate &")|fileage="& strInterval*60 &"s;;;;;"
+Else
+	Wscript.Echo "Fileage OK - File is "& DateDiff("n", fileDate, Now) &" minutes old. (Last modified: "& fileDate &")"
+End If
+Wscript.Quit(intOK) 'Quit with OK
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+</script>
+</job>

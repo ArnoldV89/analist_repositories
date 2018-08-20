@@ -1,0 +1,80 @@
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' "check_dummy.wsf"
+' nagios@samurai.inka.de
+'
+' 02.06.2003 ver 1.1
+' That was easy
+' 
+' --------------------------------------------------------------
+' This plugin will simply return the state corresponding to the numeric value
+' of the state argument.
+'
+
+<job>
+<runtime>
+  <description>
+check_cputime (nrpe_nt-plugin) 1.1
+The nagios plugins come with ABSOLUTELY NO WARRANTY. You may redistribute
+copies of the plugins under the terms of the GNU General Public License.
+For more information about these matters, see the file named COPYING.
+Copyright (c) 1999-2001 Ethan Galstad/Hagen Deike (nagios@samurai.inka.de)
+
+This plugin will simply return the state corresponding to the numeric value
+of the state argument.
+  </description>
+  <named
+    name="h"
+    helpstring="Help"
+    type="simple"
+    required="false" 
+  />
+  <named
+    name="state"
+    helpstring="0->OK, 1->Warning, 2->Critical, 3->Unkown"
+    type="string"
+    required="true"
+  />
+  <example>
+Example: check_dummy.wsf /state:1
+</example>
+</runtime>
+<script language="VBScript">
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' Const's and Var's
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Cons for return val's
+Const intOK = 0
+Const intWarning = 1
+Const intCritical = 2
+Const intUnknown = 3
+
+'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' Help
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+  If Wscript.Arguments.Named.Exists("h") Or not Wscript.Arguments.Named.Exists("state") Or Wscript.Arguments.Named("state") > 255 Then
+	Wscript.Echo "Plugin help screen:"
+      Wscript.Arguments.ShowUsage()
+      Wscript.Quit(intUnknown)
+  End If
+'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' Main
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+If Wscript.Arguments.Named("state") = 0 Then
+	Wscript.Echo "Status is OK"
+	Wscript.Quit(intOK) 'Quit with OK
+Elseif Wscript.Arguments.Named("state") = 1 Then
+	Wscript.Echo "Status is WARNING"
+	Wscript.Quit(intWarning) 'Quit with warning
+Elseif Wscript.Arguments.Named("state") = 2 Then
+	Wscript.Echo "Status is CRITICAL"
+	Wscript.Quit(intCritical) 'Quit with Critical
+Elseif Wscript.Arguments.Named("state") > 2 Then
+	Wscript.Echo "Status is UNKNOWN"
+	Wscript.Quit(intUnknown) 'Quit with Unknown
+End If
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+</script>
+</job>

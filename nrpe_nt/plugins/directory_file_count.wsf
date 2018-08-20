@@ -1,0 +1,175 @@
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'
+' "directory_file_count.wsf"
+'
+' 07/11/2003 ver 1.1
+'
+' Author:  Joe Garfunkel - JGarfunkel@saipeople.com
+'
+' Credits to Ethan Galstad / Hagen Deike for the script 
+' design of "check_fileage", which I copied and modified.
+' 
+' Changes:
+'	06/05/2004 V1.2 Adrian Wood (Picus) - Updated to use FileSystemObject
+'			to improve performance.
+'	16/08/2006 v1.2p Ciro Iriarte (ciriarte@personal.com.py) - Added performance data output
+' --------------------------------------------------------------
+' 
+' This script counts the number of files contained within a
+' directory path. For example, the number of files contained 
+' in an email queue directory.
+'
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+<job>
+<runtime>
+  <description>
+directory_file_count (nrpe_nt-plugin) 1.2
+The nagios plugins come with ABSOLUTELY NO WARRANTY. You may redistribute
+copies of the plugins under the terms of the GNU General Public License.
+For more information about these matters, see the file named COPYING.
+
+This plugin was developed on Microsoft Windows 2000, using "Windows
+Script Host" version 5.6 .  The current version of the Script Host
+can be downloaded from  msdn.microsoft.com/scripting/
+
+NOTE: WMI no longer required - Much too slow for this sort of thing.
+
+This plugin will count the number of files that are contained within a 
+specific directory path.  For example, the number of files contained in
+an mail queue directory.
+
+This version of the "directory_file_count" plugin does not perform
+any validation on your command-line options.  Please follow the
+syntax provided, and double-check that you have typed your
+options correctly.  -Thanks!
+
+An example execution command to run this plugin from the nrpe.cfg follows.
+The command should all be entered on one line, but is wrapped here for
+readability.
+
+command[directory_file_count]=c:\winnt\system32\cscript.exe 
+//NoLogo //T:30 
+c:\nrpe_nt\directory_file_count.wsf c: \\temp\\servstat\\  10  15
+
+
+  </description>
+  <named
+    name="h"
+    helpstring="Help"
+    type="simple"
+    required="false" 
+  />
+  <unnamed
+    name="drive"
+    helpstring="Disk Drive Letter."
+    many="false"
+    required="true"
+  />
+  <unnamed
+    name="directory-path"
+    helpstring="Path to the location of your files."
+    many="false"
+    required="true"
+  />
+  <unnamed
+    name="warning-value"
+    helpstring="Number of files for Warning condition."
+    many="false"
+    required="true"
+  />
+  <unnamed
+    name="critical-value"
+    helpstring="Number of files for Critical condition."
+    many="false"
+    required="true"
+  />
+  <named
+    name="p"
+    helpstring="Output performance data"
+    type="simple"
+    required="false"
+  />
+  <example>
+Example: directory_file_count.wsf   c:  \\Temp\\Queue\\  5  10
+  </example>
+</runtime>
+<script language="VBScript">
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+  If Wscript.Arguments.Named.Exists("h") Or Wscript.Arguments.Count = 0 Then
+	Wscript.Echo "Plugin help screen:"
+      Wscript.Arguments.ShowUsage()
+      Wscript.Quit(0)
+  End If
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' Const's and Var's
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+strDiskDrive = Wscript.Arguments.Unnamed.Item(0)
+strPath = Replace(Wscript.Arguments.Unnamed.Item(1), "\\", "\")
+strWarningValue = Wscript.Arguments.Unnamed.Item(2)
+strCriticalValue = Wscript.Arguments.Unnamed.Item(3)
+
+'Wscript.Echo "strDiskDrive: " & strDiskDrive
+'Wscript.Echo "strPath: " & strPath
+'Wscript.Echo "strWarningValue: " & strWarningValue
+'Wscript.Echo "strCriticalValue: " & strCriticalValue
+
+FileCount = 0
+
+Const intOK = 0
+Const intWarning = 1
+Const intCritical = 2
+Const intUnknown = 3
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+Set objFSO = WScript.CreateObject("Scripting.FileSystemObject")
+Set objDirectory = objFSO.GetFolder(strDiskDrive & strPath)
+	FileCount = objDirectory.Files.Count
+Set objDirectory = Nothing
+Set objFSO = Nothing
+
+strWarningValue = Int(strWarningValue)
+strCriticalValue = Int(strCriticalValue)
+
+If ( FileCount > strWarningValue ) or ( FileCount > strCriticalValue ) Then 
+  'Wscript.Echo "Inside outer If statement."
+
+  If (FileCount > strCriticalValue) Then
+    'Wscript.Echo "Inside CriticalValue If statement."
+    If Wscript.Arguments.Named.Exists("p") Then
+		Wscript.Echo "CRITICAL: File count is " & FileCount & ".|'filecount'=" &FileCount &";" &strWarningValue &";" &strCriticalValue &";0;"
+	Else
+		Wscript.Echo "CRITICAL: File count is " & FileCount & "."
+	End If
+    Wscript.Quit(intCritical) 
+  End If
+
+
+  If (FileCount > strWarningValue) Then
+    'Wscript.Echo "Inside WarningValue If statement."
+    If Wscript.Arguments.Named.Exists("p") Then
+		Wscript.Echo "WARNING: File count is " & FileCount & ".|'filecount'=" &FileCount &";" &strWarningValue &";" &strCriticalValue &";0;"
+	Else
+		Wscript.Echo "WARNING: File count is " & FileCount & "."
+	End If
+    Wscript.Quit(intWarning)
+  End If
+
+End If
+
+If Wscript.Arguments.Named.Exists("p") Then
+	Wscript.Echo "OK: File count is " & FileCount & ".|'filecount'=" &FileCount &";" &strWarningValue &";" &strCriticalValue &";0;"
+Else
+	Wscript.Echo "OK: File count is " & FileCount & "."
+End If
+Wscript.Quit(intOK)
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+</script>
+</job>

@@ -1,0 +1,225 @@
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' "check_process.wsf"
+' nagios@samurai.inka.de
+'
+' 02.06.2003 ver 1.1
+' 08.04.2004 ver 1.2 
+'		Updated: Adrian Wood
+'		Changes: Removed case sensitivity and added the w and c options
+'			     for threshold checking.
+' 05.11.2004 ver 1.2-nucleo
+'		Updated: Ciro Iriarte
+'		changes: Put back case sensivity
+' 16.08.2006 ver 1.2-nucleo-p
+' 		Updated: Ciro Iriarte (ciriarte@personal.com.py)
+'		Changes: Added Performance Data output
+'				 Modified intProcCounter evaluation (>= instead of >)
+' 
+' --------------------------------------------------------------
+' Checks if at least one defined process is running or that the number of 
+' processes is within the specified limits.
+'
+
+<job>
+<runtime>
+  <description>
+check_process (nrpe_nt-plugin) 1.2
+
+The nagios plugins come with ABSOLUTELY NO WARRANTY. You may redistribute
+copies of the plugins under the terms of the GNU General Public License.
+For more information about these matters, see the file named COPYING.
+Copyright (c) 1999-2001 Ethan Galstad/Hagen Deike (nagios@samurai.inka.de)
+
+Checks if at least one defined process is running or that the number of 
+processes is within the specified limits.
+  </description>
+  <named
+    name="h"
+    helpstring="Help"
+    type="simple"
+    required="false" 
+  />
+  <named
+    name="info"
+    helpstring="Returns a list of all processes by ID and name"
+    type="simple"
+    required="false"
+  />
+  <unnamed
+    name="process"
+    helpstring="The process to watch - uses a case-insensitive 
+          regular expression match"
+    many="false"
+    required="true"
+  />
+  <named
+    name="host"
+    helpstring="Defines the netbios name of the system to monitor"
+    type="string"
+    required="false"
+  />
+  <named
+    name="w"
+    helpstring="The number of processes that will generate a warning alert."
+    type="string"
+    required="false"
+  />
+  <named
+    name="c"
+    helpstring="The number of processes that will generate a critical alert."
+    type="string"
+    required="false"
+  />
+  <named
+    name="p"
+    helpstring="Output performance data"
+    type="simple"
+    required="false"
+  />
+
+  <example>
+NOTE: - Use both /w:X and /c:X together to indicate that too many 
+        processes are a problem.
+      - Don't use either /w:X or /c:X to indicate that finding the 
+        process missing is a problem.
+ 
+Example: check_process.wsf /info
+         Will return a list of all processes that are running.
+         The output will look As follows:
+         
+         ID     Process
+         -------------------------------
+         0      System Idle Process
+         4      System
+         1312   smss.exe
+         1392   csrss.exe
+         1416   winlogon.exe
+         1460   services.exe
+         1472   lsass.exe
+         1688   svchost.exe
+         [...]
+         
+         To use the plugin you need the string that is returned.
+         
+         In this case, if you wish to monitor ensure that the winlogon.exe 
+	 process is running, use the command:
+         
+		check_process.wsf winlogon.exe
+         
+         If you want to ensure that at most between 5 and 10 cmd.exe processes
+	 are running on the system, use the command:
+		 
+		 check_process.wsf cmd.exe /w:5 /c:10
+
+  </example>
+</runtime>
+
+<script language="VBScript">
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' Const's and Var's
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Cons for return val's
+Const ERROR_OK = 0
+Const ERROR_WARNING = 1
+Const ERROR_CRITICAL = 2
+Const ERROR_UNKNOWN = 3
+
+Const MSG_SUCCESS = "SUCCESS: "
+Const MSG_WARNING = "WARNING: "
+Const MSG_CRITICAL = "CRITICAL: "
+
+' Cons for FSO
+Const ForReading = 1
+Const ForWriting = 2
+'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' Help
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+If Wscript.Arguments.Named.Exists("host") Then
+	strComputer = Wscript.Arguments.Named("host")
+Else
+	strComputer = "."
+End If
+
+If Wscript.Arguments.Named.Exists("info") Then
+	Set objWMIService = GetObject("winmgmts:" & "{impersonationLevel=impersonate}!\\"& strComputer &"\root\cimv2")
+	Set colProcesses = objWMIService.ExecQuery("Select * from Win32_Process")
+
+	Wscript.Echo Vbcrlf &" ID"& vbTab &"Process"
+	Wscript.Echo "------------------------------------------------------------"
+	For Each objProcess In colProcesses 
+		Wscript.Echo " "& objProcess.ProcessID & Vbtab & objProcess.Name
+	Next
+	Wscript.Quit(intUnknown)
+End If
+
+If Wscript.Arguments.Named.Exists("h") Or Wscript.Arguments.Unnamed.Count <= 0 Or Wscript.Arguments.Unnamed.Count > 1 Then
+	Wscript.Echo "Plugin help screen:"
+      Wscript.Arguments.ShowUsage()
+      Wscript.Quit(intUnknown)
+End If
+
+'To protect the intent of the original script, a threshold check is only performed if
+'both w and c arguments are passed. If one or both are missing the script reports
+'an error when the process exists i.e. the process indicates an error condition as 
+'opposed to having too many running.
+If (Wscript.Arguments.Named.Exists("w") And Wscript.Arguments.Named.Exists("c")) Then
+	bThresholdCheck = True
+	intWarning = CLng(Wscript.Arguments.Named("w"))
+	intCritical = CLng(Wscript.Arguments.Named("c"))
+End If 'WScript.Arguments
+
+'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' Main
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+'Set objDictionary = CreateObject("Scripting.Dictionary")
+Set objWMIService = GetObject("winmgmts:" & "{impersonationLevel=impersonate}!\\"& strComputer &"\root\cimv2")
+Set colProcesses = objWMIService.ExecQuery("Select * from Win32_Process")
+Set objRegEx = New RegExp			' Create regular expression.
+
+objRegEx.Pattern = Wscript.Arguments.Unnamed.Item(0)	' Set pattern to find.
+'Se comenta por conveniencia - CI.-
+'objRegEx.IgnoreCase = True		' Set case insensitivity.
+
+intProcCounter = 0
+For Each objProcess In colProcesses 
+	If objRegEx.Test(objProcess.Name) Then
+		intProcCounter = intProcCounter + 1
+' Debug - CI.-
+'		WScript.Echo objProcess.Name
+	End If 'objRegEx.Test
+Next 'objProcess
+
+'If performing a threshold check, return an appropriate error level based on the number found.
+' otherwise report if the process is present or not.
+If bThresholdCheck Then
+	intReturn = ERROR_OK
+	If intProcCounter >= intWarning Then intReturn = ERROR_WARNING
+	If intProcCounter >= intCritical Then intReturn = ERROR_CRITICAL
+Else
+	If intProcCounter > 0 Then
+		intReturn = ERROR_OK
+	Else
+		intReturn = ERROR_CRITICAL
+	End If 'intProcCounter
+End If 'bTresholdCheck
+
+If Wscript.Arguments.Named.Exists("p") Then
+	strMsg = "There is " & intProcCounter & " process(es) running.|procs=" & intProcCounter & ";" & intWarning & ";" & intCritical & ";0;"
+Else
+	strMsg = "There is " & intProcCounter & " process(es) running."
+End If
+
+Select Case intReturn
+	Case ERROR_OK : strMsg = MSG_SUCCESS & strMsg
+	Case ERROR_WARNING : strMsg = MSG_WARNING & strMsg
+	Case ERROR_CRITICAL : strMsg = MSG_CRITICAL & strMsg
+End Select
+
+WScript.Echo strMsg
+WScript.Quit(intReturn)
+	
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+</script>
+</job>

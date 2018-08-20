@@ -1,0 +1,255 @@
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' "check_service.wsf"
+' nagios@samurai.inka.de
+'
+' 02.06.2003 ver 1.11
+' Minor help bugfixes
+'
+' 04.06.2003 ver 1.12
+' Fix problem if service doesn't exsist
+' Added support for the /host switch
+'
+' 05.06.2003 ver 1.13
+' Bug fix'n :)
+' 
+' --------------------------------------------------------------
+' This plugin checks In what state a defined service Is.
+'
+
+<job>
+<runtime>
+  <description>
+check_service (nrpe_nt-plugin) 1.13
+The nagios plugins come with ABSOLUTELY NO WARRANTY. You may redistribute
+copies of this plugin under the terms of the GNU General Public License.
+For more information about these matters, see the file named COPYING.
+Copyright (c) 1999-2001 Ethan Galstad/Hagen Deike (nagios@samurai.inka.de)
+
+This plugin checks In what state a defined service Is.
+  </description>
+  <named
+    name="h"
+    helpstring="Help"
+    type="simple"
+    required="false" 
+  />
+  <unnamed
+    name="service"
+    helpstring="The name of the service to check"
+    many="false"
+    required="1"
+  />
+  <named
+    name="info"
+    helpstring="Returns a list of all services by name"
+    type="simple"
+    required="false"
+  />
+  <named
+    name="host"
+    helpstring="Defines the netbios name of the system to monitor"
+    type="simple"
+    required="false"
+  />
+  <named
+    name="Stopped"
+    helpstring="0->OK, 1->Warn, 2->Crit, 3->Unkown, Default: 2"
+    type="string"
+    required="false"
+  />
+  <named
+    name="Start Pending"
+    helpstring="0->OK, 1->Warn, 2->Crit, 3->Unkown, Default: 1"
+    type="string"
+    required="false"
+  />
+  <named
+    name="Stop Pending"
+    helpstring="0->OK, 1->Warn, 2->Crit, 3->Unkown, Default: 1"
+    type="string"
+    required="false"
+  />
+  <named
+    name="Running"
+    helpstring="0->OK, 1->Warn, 2->Crit, 3->Unkown, Default: 0"
+    type="string"
+    required="false"
+  />
+  <named
+    name="Continue Pending"
+    helpstring="0->OK, 1->Warn, 2->Crit, 3->Unkown, Default: 1"
+    type="string"
+    required="false"
+  />
+  <named
+    name="Pause Pending"
+    helpstring="0->OK, 1->Warn, 2->Crit, 3->Unkown, Default: 1"
+    type="string"
+    required="false"
+  />
+  <named
+    name="Paused"
+    helpstring="0->OK, 1->Warn, 2->Crit, 3->Unkown, Default: 2"
+    type="string"
+    required="false"
+  />
+  <named
+    name="Unknown"
+    helpstring="0->OK, 1->Warn, 2->Crit, 3->Unkown, Default: 3"
+    type="string"
+    required="false"
+  />
+  <named
+    name="No Service"
+    helpstring="0->OK, 1->Warn, 2->Crit, 3->Unkown, Default: 3"
+    type="string"
+    required="false"
+  />
+
+  <example>
+Example: check_service.wsf /info
+         Will return a large list of all services that are present.
+         The output will look As follows:
+         
+         Service:     Alerter
+         Description: Warndienst
+
+         Service:     ALG
+         Description: Gatewaydienst auf Anwendungsebene
+
+         [...]
+         
+         To use the plugin you need the string that Is returned For service:
+         In this Case If you wish To monitor the alerter you use this command
+         
+         check_service.wsf Alerter
+
+         Please notice that the String Is Case sensitive
+  </example>
+</runtime>
+<script language="VBScript">
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' Const's and Var's
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Cons for return val's
+Const intOK = 0
+Const intWarning = 1
+Const intCritical = 2
+Const intUnknown = 3
+
+' Cons for FSO
+Const ForReading = 1
+Const ForWriting = 2
+'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' Help
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+If Wscript.Arguments.Named.Exists("host") Then
+	strComputer = Wscript.Arguments.Named("host")
+Else
+	strComputer = "."
+End If
+
+If Wscript.Arguments.Named.Exists("info") Then
+
+	Set objWMIService = GetObject("winmgmts:" & "{impersonationLevel=impersonate}!\\" & strComputer & "\root\cimv2")
+	Set colRunningServices = objWMIService.ExecQuery("Select * from Win32_Service")
+
+	For Each objService In colRunningServices
+		Wscript.Echo "Service:     "& objService.Name
+'		Wscript.Echo "State:       "& objService.State
+		Wscript.Echo "Description: "& objService.DisplayName &Vbcrlf
+	Next
+	Wscript.Quit(intUnknown)
+End If
+
+If Wscript.Arguments.Named.Exists("h") Or Wscript.Arguments.Unnamed.Count <= 0 Then
+	Wscript.Echo "Plugin help screen:"
+      Wscript.Arguments.ShowUsage()
+      Wscript.Quit(intUnknown)
+End If
+'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' Main
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+Set objWMIService = GetObject("winmgmts:" & "{impersonationLevel=impersonate}!\\" & strComputer & "\root\cimv2")
+Set colRunningServices = objWMIService.ExecQuery("Select * from Win32_Service")
+
+For intCounter = 0 To Wscript.Arguments.Unnamed.Count-1
+	For Each objService In colRunningServices
+
+		If Wscript.Arguments.Unnamed.Item(intCounter) = objService.Name Then
+	
+			If objService.State = "Stopped" Then
+				Wscript.Echo "The service state is Stopped"
+				If Wscript.Arguments.Named.Exists("Stopped") Then
+					Wscript.Quit(CByte(Wscript.Arguments.Named("Stopped")))
+				Else
+					Wscript.Quit(intCritical)
+				End If	
+			Elseif objService.State = "Start Pending" Then
+				Wscript.Echo "The service state is Start Pending"
+				If Wscript.Arguments.Named.Exists("Start Pending") Then
+					Wscript.Quit(CByte(Wscript.Arguments.Named("Start Pending")))
+				Else
+					Wscript.Quit(intWarning)
+				End If	
+			Elseif objService.State = "Stop Pending" Then
+				Wscript.Echo "The service state is Stop Pending"
+				If Wscript.Arguments.Named.Exists("Stop Pending") Then
+					Wscript.Quit(CByte(Wscript.Arguments.Named("Stop Pending")))
+				Else
+					Wscript.Quit(intWarning)
+				End If	
+			Elseif objService.State = "Running" Then
+				Wscript.Echo "The service state is Running"
+				If Wscript.Arguments.Named.Exists("Running") Then
+					Wscript.Quit(CByte(Wscript.Arguments.Named("Running")))
+				Else
+					Wscript.Quit(intOK)
+				End If	
+			Elseif objService.State = "Continue Pending" Then
+				Wscript.Echo "The service state is Continue Pending"
+				If Wscript.Arguments.Named.Exists("Continue Pending") Then
+					Wscript.Quit(CByte(Wscript.Arguments.Named("Continue Pending")))
+				Else
+					Wscript.Quit(intWarning)
+				End If	
+			Elseif objService.State = "Pause Pending" Then
+				Wscript.Echo "The service state is Pause Pending"
+				If Wscript.Arguments.Named.Exists("Pause Pending") Then
+					Wscript.Quit(CByte(Wscript.Arguments.Named("Pause Pending")))
+				Else
+					Wscript.Quit(intWarning)
+				End If	
+			Elseif objService.State = "Paused" Then
+				Wscript.Echo "The service state is Paused"
+				If Wscript.Arguments.Named.Exists("Paused") Then
+					Wscript.Quit(CByte(Wscript.Arguments.Named("Paused")))
+				Else
+					Wscript.Quit(intCritical)
+				End If	
+			Elseif objService.State = "Unknown" Then
+				Wscript.Echo "The service state is Unknown"
+				If Wscript.Arguments.Named.Exists("Unknown") Then
+					Wscript.Quit(CByte(Wscript.Arguments.Named("Unknown")))
+				Else
+					Wscript.Quit(intUnknown)
+				End If	
+			End If
+			
+		End If 
+	Next
+Next
+
+Wscript.Echo "The service does not exsist"
+If Wscript.Arguments.Named.Exists("Unknown") Then
+	Wscript.Quit(CByte(Wscript.Arguments.Named("Unknown")))
+Else
+	Wscript.Quit(intUnknown)
+End If	
+
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+</script>
+</job>
