@@ -1,0 +1,17 @@
+#!/bin/bash
+FS=$1
+PROCESO=$2
+
+##se obtiene primeramente el PID del proceso del postgres####
+PID=$(ps -fea | grep postgre |grep -v $0 |grep "$FS" | awk '{print $2}')
+#echo "el pid es: $PID"
+###verificamos si el proceso esta arriba###
+RUN=$(ps -fea | grep "postgre" | grep "$PID" | grep -w "$PROCESO" | wc -l )
+if [ $RUN -eq 1 ]; then
+        echo "PROCS OK - El proceso '$PROCESO' se encuentra arriba"
+        exit 0;
+else
+        echo "PROCS CRITICAL - EL proceso '$PROCESO' se encuentra abajo"
+        exit 2;
+fi
+

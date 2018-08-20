@@ -1,0 +1,66 @@
+#!/usr/bin/ksh
+#####################################################################################
+#
+# Script      : check_log
+# Autor       : Edgar N\ú\ñez
+# Comentarios : Creado para monitoreo de logs.
+# Modificacion: Ultima modificacion el 03/04/2008. 
+# Obs.	      : Favor no realizar modificaciones sin consultar antes, sean las que 
+# 	       sean. 
+#
+#####################################################################################
+
+HOST=$(hostname)
+GREP=/bin/grep
+LOG=$1
+SIBUS=$2
+NOBUS=$3
+OFFSET=$(echo $1|tr '/' '_')
+
+if [ -r $LOG ]
+  then 
+#tmp1=$(/usr/bin/perl -e 'my($logfile,$offsetfile) = @ARGV;' -e 'print "$ARGV[0]";' -e 'if (! -f $logfile) {print "File $logfile cannot be read.\n"; exit 66;}' -e 'unless (open(LOGFILE, $logfile)) {print "File $logfile cannot be read.\n";exit 66;}' -e 'my ($inode, $offset) = (0, 0);' -e 'if (open(OFFSET, $offsetfile)) {$_ = <OFFSET>;unless (! defined $_) {chomp $_; $inode = $_; $_ = <OFFSET>; unless (! defined $_) { chomp $_;$offset = $_;}}}' -e 'my ($ino, $size);' -e 'unless ((undef,$ino,undef,undef,undef,undef,undef,$size) = stat $logfile) {print "Cannot get $logfile file size.\n", $logfile;exit 65;}' -e 'if ($inode == $ino) {exit 0 if $offset == $size; if ($offset > $size) {$offset = 0;print "***************\n";print "*** WARNING ***: Log file $logfile is smaller than last time checked!\n";print "*************** This could indicate tampering.\n";}}' -e 'if ($inode != $ino || $offset > $size) {$offset = 0;}' -e 'seek(LOGFILE, $offset, 0);' -e 'print <LOGFILE>;' -e '$size = tell LOGFILE;' -e 'close LOGFILE;' -e 'unless (open(OFFSET, ">$offsetfile")) {print "File $offsetfile cannot be created. Check your permissions.\n";exit 73;}' -e 'unless (chmod 0600, $offsetfile) {print "Cannot set permissions on file $offsetfile\n";exit 65;}' -e 'print OFFSET "$ino\n$size\n";' -e 'close OFFSET;' -e 'exit 0;' $LOG ~/bin/.$OFFSET.$HOST.offset)
+
+tmp1=$(/usr/bin/perl \
+-e 'my($logfile,$offsetfile) = @ARGV;' \
+-e 'if (! -f $logfile) {print "File $logfile cannot be read.\n"; exit 66;}' \
+-e 'unless (open(LOGFILE, $logfile)) {print "File $logfile cannot be read.\n";exit 66;}' \
+-e 'my ($inode, $offset) = (0, 0);' \
+-e 'if (open(OFFSET, $offsetfile)) {$_ = <OFFSET>;unless (! defined $_) {chomp $_; $inode = $_; $_ = <OFFSET>; unless (! defined $_) { chomp $_;$offset = $_;}}}' \
+-e 'my ($ino, $size);' \
+-e 'unless ((undef,$ino,undef,undef,undef,undef,undef,$size) = stat $logfile) {print "Cannot get $logfile file size.\n", $logfile;exit 65;}' \
+-e 'if ($inode == $ino) {exit 0 if $offset == $size; if ($offset > $size) {$offset = 0;print "***************\n";print "*** WARNING ***: Log file $logfile is smaller than last time checked!\n";print "*************** This could indicate tampering.\n";}}' \
+-e 'if ($inode != $ino || $offset > $size) {$offset = 0;}' \
+-e 'seek(LOGFILE, $offset, 0);' \
+-e 'print <LOGFILE>;' \
+-e '$size = tell LOGFILE;' \
+-e 'close LOGFILE;' \
+-e 'unless (open(OFFSET, ">$offsetfile")) {print "File $offsetfile cannot be created. Check your permissions.\n";exit 73;}' \
+-e 'unless (chmod 0600, $offsetfile) {print "Cannot set permissions on file $offsetfile\n";exit 65;}' \
+-e 'print OFFSET "$ino\n$size\n";' \
+-e 'close OFFSET;' \
+-e 'exit 0;' $LOG /tmp/.$OFFSET.$HOST.offset)
+
+
+tmp2=$(echo "$tmp1" | $GREP -E -i "($SIBUS)" )
+
+if [ -n "$NOBUS" ]
+then 
+    tmp3=$( echo "$tmp2" | $GREP -E -i -v "($NOBUS)" )
+else
+    tmp3=$tmp2
+fi
+
+if [ -n "$tmp3" ]
+then echo "LOG CRITICAL - $LOG: $(echo "$tmp3")" 
+     #echo "$tmp3"  | mailx -s "LOG CRITICAL - $HOST: $LOG" produccion@personal.com.py
+     #echo "$tmp3"   
+     exit 2
+else echo "LOG OK - $LOG"
+     exit 0
+fi
+
+else
+    echo "UNKNOWN - Chequeo no contiene datos"
+    exit 3
+fi

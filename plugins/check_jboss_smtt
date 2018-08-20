@@ -1,0 +1,207 @@
+#!/bin/bash
+#################################################################################
+## Nagios plug-in for Red Hat Jboss Monitoring 
+## (c) 2018 Analistas de Producción. All rights reserved.
+#################################################################################
+## Especificación del proceso
+## Autor: Arnaldo Aranda
+## Creation Date: 29/06/2018
+## Last Modificación: /07/2018
+## About this plug-in:
+## define command{
+##     command_name    check_jboss_smtt
+##     command_line    $USER1$/check_jboss_smtt $1 $2 $3 $4 $5 $6
+## }
+## Comments: 
+## 
+##
+##
+##
+#$1 {controller}     ==> Jboss controller connection 
+#$2 {user}  ==> User to connect jboss client
+#$3 {password}      ==> Password to connect jboss client
+#$4 {option}  ==> Option to do
+#$5 {warning}   ==> Warning value
+#$6 {critical}  ==> Critical value
+####################################################################################
+opt=$(echo $4| awk '{print toupper($0)}')
+if [ $1 = "-H" ] || [ $1 = "-h" ]; then
+	echo -e "=============================================================\nAbout this plug-in:\ncommand_name: check_jboss_smtt\nNagios plug-in for Red Hat Jboss Monitoring.\n(c) 2018 Analistas de Producción. All rights reserved.\ncommand_line: /check_jboss_smtt 1$ 2$ 3$ 4$ 5$ 6$\n=============================================================\n1$ {controller}     ==> Jboss controller connection\n2$ {user}  ==> User to connect jboss client\n3$ {password}      ==> Password to connect jboss client\n4$ {option}  ==> Option to do\n5$ {warning}   ==> Warning value\n6$ {critical} ==> Critical Value\n=============================================================\noptions\n'ESTATE' ==> Estado de Jboss (running/stopped)\n'MEM' ==> Memoria de la Instancia Server\n'MEMGC' ==> Memoria Vieja Generación Garbage Collector\n'TIMEGC' ==> Tiempo de Recolección Garbage Collector\n'PEAK' ==> Pico de Cantidad de Hilos Instancia\n'DAEMON' ==> Cantidad de Hilos Demonios Instancia\n'THREAD' ==> Cantidad Total de Hilos Instancia\n============================================================="
+exit 0
+fi
+
+CALCULATE_MEM () {
+if [ $4 = "MEM" ]; then
+	CMD=$(echo `/jboss7/Middleware/jboss-eap/bin/jboss-cli.sh --connect --controller=$1.sis.personal.net.py:9990 --user=$2 --password=$3 --commands=/core-service=platform-mbean/type=memory:read-attribute"("name=heap-memory-usage")" | grep "ed" | awk '{print $3}' | tr -d "L" | tr -d "\,"`)
+	MSGOUT="Uso de la Memoria de la Instancia"
+else
+	CMD=$(echo `/jboss7/Middleware/jboss-eap/bin/jboss-cli.sh --connect --controller=$1.sis.personal.net.py:9990 --user=$2 --password=$3 --commands=/core-service=platform-mbean/type=memory-pool/name=PS_Old_Gen:read-attribute"("name=collection-usage")" | grep "ed" | awk '{print $3}' | tr -d "L" | tr -d "\,"`)
+	MSGOUT="Uso de la Memoria Vieja Garbage Collector en la Instancia"
+fi
+
+USED=$(echo $CMD|awk '{print $1}')
+USED_MB=`expr $USED \/ 1024 \/ 1024`
+TOTAL=$(echo $CMD|awk '{print $2}')
+TOTAL_MB=`expr $TOTAL \/ 1024 \/ 1024`
+
+WARN=`expr $TOTAL \* $5 \/ 100`
+WARN_MB=`expr $WARN \/ 1024 \/ 1024`
+
+CRI=`expr $TOTAL \* $6 \/ 100`
+CRI_MB=`expr $CRI \/ 1024 \/ 1024`
+
+if [ $USED -eq 0 ] || [ $TOTAL -eq 0 ]
+then
+	echo "[Something Wrong] - No se registra uso de Memoria - Algun problema con el Jboss?"
+	exit 2
+fi
+if [ $USED -lt $WARN ]
+then
+	st="OK"
+	rt=0
+elif [ $USED -gt $WARN ] && [ $USED -lt $CRI ]
+then
+	st="WARN"
+	rt=1
+elif [ $USED -gt $CRI ]
+then
+	st="CRI"
+	rt=2
+fi
+echo "[$st] $MSGOUT | uso_mem=${USED_MB}MB;$WARN_MB;$CRI_MB;0;"
+exit $rt
+}
+
+CALCULATE_THREADS(){
+case $4 in
+	"PEAK")
+	CMD=$(echo `/jboss7/Middleware/jboss-eap/bin/jboss-cli.sh --connect --controller=$1.sis.personal.net.py:9990 --user=$2 --password=$3 --commands="/core-service=platform-mbean/type=threading:read-attribute(name=peak-thread-count)" | grep "result" | awk '{print $3}' | tr -d "L" | tr -d "\," `)
+	MSGOUT="Pico de Cantidad de Hilos en la Instancia - Result[$CMD]"
+	;;
+	"DAEMON")
+	CMD=$(echo `/jboss7/Middleware/jboss-eap/bin/jboss-cli.sh --connect --controller=$1.sis.personal.net.py:9990 --user=$2 --password=$3 --commands="/core-service=platform-mbean/type=threading:read-attribute(name=daemon-thread-count)" | grep "result" | awk '{print $3}' | tr -d "L" | tr -d "\," `)
+	MSGOUT="Cantidad de Hilos Demonios en la Instancia - Result[$CMD]"
+	;;
+	"THREAD")
+	CMD=$(echo `/jboss7/Middleware/jboss-eap/bin/jboss-cli.sh --connect --controller=$1.sis.personal.net.py:9990 --user=$2 --password=$3 --commands="/core-service=platform-mbean/type=threading:read-attribute(name=thread-count)" | grep "result" | awk '{print $3}' | tr -d "L" | tr -d "\," `)
+	MSGOUT="Cantidad de Total de Hilos en la Instancia - Result[$CMD]"
+	;;
+esac
+
+if [ $CMD -lt $5 ]
+then
+	st="OK"
+	rt=0
+elif [ $CMD -gt $5 ] && [ $CMD -lt $6 ]
+then
+	st="WAR"
+        rt=1
+elif [ $CMD -gt $6 ]
+then
+	st="CRI"
+        rt=2
+fi
+echo "[$st] $MSGOUT | threads=$CMD;$5;$6;0;"
+exit $rt
+}
+
+for x in {1..5}
+do
+case $x in
+        1)
+                if [ -z $1 ]; then
+                echo "Se necesita el siguiente Valor {Controller} para continuar - VERIFICAR"
+                exit 2
+                break
+                fi
+        ;;
+        2)
+                if [ -z $2 ]; then
+                echo "Se necesita el siguiente Valor {User} para continuar - VERIFICAR"
+                exit 2
+                break
+                fi
+        ;;
+        3)
+                if [ -z $3 ]; then
+                echo "Se necesita el siguiente Valor {Password} para continuar - VERIFICAR"
+                exit 2
+                break
+                fi
+        ;;
+	4)
+		if [ -z $4 ]; then
+		echo "Se necesita el siguiente valor {option} para continuar - VERIFICAR"
+		exit 2
+		break
+		fi
+	;; 
+esac
+done
+
+case $opt in 
+	"ESTATE")
+	CMD=$(echo `/jboss7/Middleware/jboss-eap/bin/jboss-cli.sh --connect --controller=$1.sis.personal.net.py:9990 --user=$2 --password=$3 --commands=:read-attribute"("name=server-state")" | grep "result" | awk '{print $3}'`)
+	if [ $CMD = '"running"' ]
+	then
+		echo "[OK] Estado del Jboss - [$CMD]"
+		exit 0
+	elif [ -z $CMD ]
+	then
+		echo "[CRI] Estado del Jboss - [UNKNOW OR EMPTY]"
+		exit 2
+	else
+		echo "[CRI] Estado del Jboss - [$CMD]"
+		exit 2
+	fi
+	;;
+	"MEM"|"MEMGC")
+
+	if [ -z $5 ]
+	then
+		echo "Se necesita el siguiente valor para continuar {WARNING VALUE} - VERIFICAR"
+		exit 2
+	elif [ "`echo $5 | egrep ^[[:digit:]]+$`" = "" ]
+	then
+		echo "El valor {$5} introducido no corresponde se necesita valores numericos - VERIFICAR"
+		exit 1
+	elif [ -z $6 ]
+	then
+		echo "Se necesita el siguiente valor para continuar {CRITICAL VALUE} - VERIFICAR"
+		exit 2
+	elif [ "`echo $6 | egrep ^[[:digit:]]+$`" = "" ]
+	then
+		echo "El valor {$6} introducido no corresponde se necesita valores numericos - VERIFICAR"
+		exit 2
+	else
+		CALCULATE_MEM $1 $2 $3 $4 $5 $6
+	fi	
+	;;
+	"TIMEGC")
+		echo ":( Parameter no configured jet - bye"
+		exit 1
+	;;
+	"PEAK"|"DAEMON"|"THREAD")
+	if [ -z $5 ]
+        then
+                echo "Se necesita el siguiente valor para continuar {WARNING VALUE} - VERIFICAR"
+                exit 2
+        elif [ "`echo $5 | egrep ^[[:digit:]]+$`" = "" ]
+        then
+                echo "El valor {$5} introducido no corresponde se necesita valores numericos - VERIFICAR"
+                exit 1
+        elif [ -z $6 ]
+        then
+                echo "Se necesita el siguiente valor para continuar {CRITICAL VALUE} - VERIFICAR"
+                exit 2
+        elif [ "`echo $6 | egrep ^[[:digit:]]+$`" = "" ]
+        then
+                echo "El valor {$6} introducido no corresponde se necesita valores numericos - VERIFICAR"
+                exit 2
+        else
+                CALCULATE_THREADS $1 $2 $3 $4 $5 $6
+        fi
+
+	;;
+esac
+

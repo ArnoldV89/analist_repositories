@@ -1,0 +1,57 @@
+#!/bin/bash
+#Script que controla la memoria de los jboss
+#Autor: Ariel Torres
+#Fecha: 20/08/2016
+
+#Parametros que recibe
+CONTROLLER=$1
+PORT=$2
+WAR=$3
+CRI=$4
+
+
+##COMANDO=$(echo `/jboss7/Middleware/jboss-as/bin/jboss-cli.sh --connect --controller=crm-jb1.sis.personal.net.py:9999 --user=admin --password=.admin13. --commands=/host=$HOST/server=$SERVER/core-service=platform-mbean/type=memory:read-attribute"("name=heap-memory-usage")" | grep "ed" | awk '{print $3}' | tr -d "L" | tr -d "\,"`)
+COMANDO=$(echo `/jboss7/Middleware/jboss-as/bin/jboss-cli.sh --connect --controller=${CONTROLLER}:${PORT} --user=nagios --password=.nagios13. --commands=/core-service=platform-mbean/type=memory:read-attribute"("name=heap-memory-usage")" | grep "ed" | awk '{print $3}' | tr -d "L" | tr -d "\,"`)
+
+USADO=$(echo $COMANDO|awk '{print $1}')
+USADO_MB=`expr $USADO \/ 1024 \/ 1024` 
+TOTAL=$(echo $COMANDO|awk '{print $2}')
+TOTAL_MB=`expr $TOTAL \/ 1024 \/ 1024` 
+
+#Para warning (80%)
+W=`expr $TOTAL \* $WAR` 
+WARNING=`expr $W \/ 100` 
+WARNING_MB=`expr $WARNING \/ 1024 \/ 1024` 
+
+#Para critical (90%)
+C=`expr $TOTAL \* $CRI` 
+CRITICAL=`expr $C \/ 100` 
+CRITICAL_MB=`expr $CRITICAL \/ 1024 \/ 1024`
+
+#Si el comando ejecutado devuelve cero
+if [ $TOTAL -eq 0 ] || [ $USADO -eq 0 ]
+then
+	echo "UNKNOWN - El chequeo no contiene datos"
+	exit 3
+fi
+
+if [ $USADO -lt $WARNING ]
+then
+	ESTADO=OK
+	RETORNO=0		
+fi
+
+if [ $USADO -gt $WARNING ]
+then
+	ESTADO=WARNING
+	RETORNO=1	
+fi
+
+if [ $USADO -gt $CRITICAL ]
+then
+	ESTADO=CRITICAL
+	RETORNO=2
+fi
+
+echo "$ESTADO - Uso de Memoria $USADO_MB MB de la instancia |uso_mem=${USADO_MB}MB;$WARNING_MB;$CRITICAL_MB;0;"
+exit $RETORNO

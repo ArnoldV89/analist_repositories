@@ -1,0 +1,38 @@
+#!/bin/bash
+#Script que controla el estado de los jboss
+#Autor: Ariel Torres
+#Fecha: 20/08/2016
+
+#Parametros que recibe
+#CONTROLLER=$1
+HOST=$1
+PORT=$2
+
+#COMANDO=`/jboss7/Middleware/jboss-as/bin/jboss-cli.sh --connect --controller=crm-jb1.sis.personal.net.py:9999 --user=admin --password=.admin13. --commands=/host=$HOST:read-attribute"("name=host-state")" | grep "result" | awk '{print $3}'`
+COMANDO=`/jboss7/Middleware/jboss-as/bin/jboss-cli.sh --connect --controller=$HOST:$PORT --user=nagios --password=.nagios13. --commands=:read-attribute"("name=server-state")" | grep "result" | awk '{print $3}'`
+
+
+#Si el comando ejecutado devuelve cero
+if [ -z $COMANDO ]
+then
+	ESTADO=CRITICAL
+	RETORNO=2
+	SALIDA="abajo"
+fi
+
+if [ $COMANDO = '"running"' ]
+then
+	ESTADO=OK
+	RETORNO=0	
+	SALIDA=$COMANDO
+fi
+
+if [ $COMANDO != '"running"' ]
+then
+	ESTADO=CRITICAL
+	RETORNO=2
+	SALIDA="abajo"
+fi
+
+echo "$ESTADO - El estado del JBOSS es $SALIDA"
+exit $RETORNO

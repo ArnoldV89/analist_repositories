@@ -1,0 +1,161 @@
+#!/bin/bash
+# Autor       		: Arnaldo Aranda
+# Area a notificación	: DBA - SEP
+# Comentarios 		: Creado para control de replicaciones via postgres.
+# Creación		: 07/05/2018.
+# Modificacion		: Ultima modificacion el 07/05/2018.
+# comentarios:
+# - se modifico para agregar port en conexiones postgres debido a diferentes versiones
+# - se agrego una opcion mas {4} debido a que DBA añadio estado de replicacion en linea y con delay
+#Parametros a recibir:
+#$1 {hosts}     ==> host name for postgres
+#$2 {database}  ==> database name to postgres connection
+#$3 {port}      ==> port number to postgres connection
+#$4 {option}    ==> option to enter into loop
+#$5 {Warning}   ==> warning value validation
+#$6 {critical}  ==> critical value validation
+tmp="/tmp/pglogical_rpl$$.tmp"
+sql="/usr/lib64/nagios/plugins"
+#definir a continuación la variable de unidad de medida
+#De bytes a: 1° en kilobytes, 2° en MB, 3° en GB
+unit=2
+#cls se define si sera para valores de tiempo o tamaño (t(ime)/s(ize))
+cls="t"
+#cls=s
+#Se toma el parametro {option} para evaluar que hara la alarma y que salida se obtendra.
+if [ -z $1 ] || [ -z $2 ] || [ -z $3 ]; then
+	echo "ERROR VALOR NULO O VACIO - FALTAN PARAMETROS PARA CONTINUAR"
+	exit 0
+fi
+
+case $cls in
+	"s")
+case $unit in
+	1)
+		out="kb"
+		u=1024
+	;;
+	2)
+		out="mb"
+		u=1048576
+	;;
+	3)
+		out="gb"
+		u=1073741824
+	;;
+esac
+	;;
+	"t")
+case $unit in
+	1)
+		out="ms"
+	;;
+	2)
+		out="sg"
+	;;
+	3)
+		out="min"
+	;;
+	4)
+		out="hs"
+	;;
+	5)
+		out="days"
+	;;
+	6)
+		out="mths"
+	;;
+	7)
+		out="ys"
+	;;
+esac
+	;;
+	*)
+	echo "ERROR - Formato <cls> no reconocido - Verificar"
+	exit 0
+	;;
+esac
+
+case $4 in
+	
+	1)
+		PGPASSWORD=Mboroti01 /usr/bin/psql -p $3 -U nagios -d $2 -h $1 -f $sql/replication.sql > $tmp
+		if [ $(cat $tmp|grep "FATAL"|wc -l) -eq 1 ]; then
+		q=$(head -1 $tmp)
+		echo "$q"
+		exit 2
+		else
+		a=$(cat $tmp|sed '1,2d'|grep -v row|sed '$d'|awk {'print $1'})
+		if [ "$a" = "t" ]; then
+			a="true"
+			echo "Estado de la replicacion Standby en linea $2 - [OK] State result [$a]"
+			exit 0
+		else
+			a="false"
+			echo "Estado de la replicacion Standby en linea $2 - [CRITICAL] State result [$a]"
+			exit 2
+		fi
+		fi
+	;;
+	2)
+		PGPASSWORD=Mboroti01 /usr/bin/psql -p $3 -U nagios -d $2 -h $1 -f $sql/delay.sql > $tmp
+		if [ $(cat $tmp|grep "FATAL"|wc -l) -eq 1 ]; then
+                q=$(head -1 $tmp)
+                echo "$q"
+                exit 2
+                else
+		a=$(cat $tmp|sed '1,2d'|grep -v row|sed '$d'|awk {'print $1'})
+		if [ $a -lt $5 ]; then
+			echo "Retraso en la Replicacion en $2 - [OK] - [$a $out]| Retraso_$out=$a;$5;$6;"
+			exit 0
+		elif [ $a -gt $5 ] && [ $a -lt $6 ]; then
+			echo "Retraso en la Replicacion en $2 - [WARNING] - [$a $out]| Retraso_$out=$a;$5;$6;"
+			exit 1
+		elif [ $a -gt $5 ] && [ $a -gt $6 ]; then
+			echo "Retraso en la repliacion en $2 - [CRITICAL] - [$a $out]| Retraso_$out=$a;$5;$6;"
+			exit 2
+		fi
+		fi
+	;;
+	3)
+		PGPASSWORD=Mboroti01 /usr/bin/psql -p $3 -U nagios -d $2 -h $1 -f $sql/state.sql > $tmp
+		if [ $(cat $tmp|grep "FATAL"|wc -l) -eq 1 ]; then
+                q=$(head -1 $tmp)
+                echo "$q"
+                exit 2
+                else
+		a=$(cat $tmp|sed '1,2d'|grep -v row|sed '$d'|awk {'print $1'})
+		if [ "$a" = "replicating" ]; then
+			echo "Estado de la replicacion en $2 - [OK] State result [$a]"
+			exit 0
+		else
+			echo "Estado de la replicacion en $2 - [CRITICAL] State result [$a]"
+			exit 2
+		fi
+		fi
+	;;
+	4)
+		PGPASSWORD=Mboroti01 /usr/bin/psql -p $3 -U nagios -d $2 -h $1 -f $sql/replicationd.sql > $tmp
+                if [ $(cat $tmp|grep "FATAL"|wc -l) -eq 1 ]; then
+                q=$(head -1 $tmp)
+                echo "$q"
+                exit 2
+                else
+                a=$(cat $tmp|sed '1,2d'|grep -v row|sed '$d'|awk {'print $1'})
+                if [ "$a" = "t" ]; then
+                        a="true"
+                        echo "Estado de la replicacion Standby con delay $2 - [OK] State result [$a]"
+                        exit 0
+                else
+                        a="false"
+                        echo "Estado de la replicacion Standby con delay $2 - [CRITICAL] State result [$a]"
+                        exit 2
+                fi
+                fi
+        ;;
+	*)
+		echo "UNKNOW - VALOR DE OPCION INTRODUCIDO INCORRECTAMENTE - VERIFICAR"
+		exit 2
+	;;
+esac
+rm -rf $tmp

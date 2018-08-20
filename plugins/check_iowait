@@ -1,0 +1,50 @@
+#!/bin/ksh
+#
+# Nagios IOWAIT Plugin
+#
+# Description: Check the iowait status
+# Author     : Edgar Núñez
+# Version    : 1.0
+# 
+#
+
+prog=`basename $0`
+
+if [ $# -lt 2 ]; then
+echo "Usage: $0 <warning> <critical>"
+exit 2
+fi
+
+# threshold values
+WARNING=$1 
+CRITICAL=$2
+
+if (( $CRITICAL <= $WARNING ))
+then
+        echo "Warning value must be less than the critical value"
+        exit 5
+fi
+
+OUTPUT=$(sar 1 2|tail -1|awk '{print $4}')
+
+
+if (( $OUTPUT >= $CRITICAL )) 
+then
+
+        echo "CRITICAL - IOWAIT is HIGH $OUTPUT%|iowait=$OUTPUT'%';$WARNING;$CRITICAL;0;"
+        exit 1
+
+elif (( $OUTPUT >= $WARNING )) 
+then
+
+        echo "WARNING - IOWAIT is MED $OUTPUT%|iowait=$OUTPUT'%';$WARNING;$CRITICAL;0;"
+        exit 2
+
+elif (( $WARNING > $OUTPUT ))
+then
+        echo "OK - IOWAIT is OK $OUTPUT%|iowait=$OUTPUT'%';$WARNING;$CRITICAL;0;"
+        exit 0
+else
+        echo "IOWAIT STATUS UNKNOWN"
+        exit 3
+fi

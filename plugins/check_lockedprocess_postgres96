@@ -1,0 +1,134 @@
+#!/bin/bash
+# Autor       		: Arnaldo Aranda
+# Area a notificación	: DBA - SEP
+# Comentarios 		: Creado para control de replicaciones via postgres.
+# Creación		: 27/06/2018.
+# Modificacion		: Ultima modificacion el 27/06/2018.
+# comentarios:
+#Parametros a recibir:
+#$1 {hosts}     ==> host name for postgres
+#$2 {database}  ==> database name to postgres connection
+#$3 {port}      ==> port number to postgres connection
+#$4 {option}    ==> option to enter into loop
+#$5 {Critical}   ==> critical value validation
+#$6 {Warning}  ==> warning value validation
+tmp="/tmp/pglocked$$.tmp"
+sql="/usr/lib64/nagios/plugins"
+opt=$(echo $4| awk '{print toupper($0)}')
+#Se toma el parametro {option} para evaluar que hara la alarma y que salida se obtendra.
+#if [ -z $1 ] || [ -z $2 ] || [ -z $3 ]; then
+#	echo "ERROR VALOR NULO O VACIO - FALTAN PARAMETROS PARA CONTINUAR"
+#	exit 0
+#fi
+
+for x in {1..6}
+do
+case $x in
+	1)
+		if [ -z $1 ]; then
+		echo "Se necesita el siguiente Valor {hosts} para continuar - VERIFICAR"
+		exit 0
+		break
+		fi
+	;;
+	2)
+		if [ -z $2 ]; then
+                echo "Se necesita el siguiente Valor {database} para continuar - VERIFICAR"
+                exit 0
+                break
+                fi
+	;;
+	3)
+		if [ -z $3 ]; then
+                echo "Se necesita el siguiente Valor {port} para continuar - VERIFICAR"
+                exit 0
+                break
+                fi
+	;;
+	4)
+		if [ -z $4 ]; then
+                echo "Se necesita el siguiente Valor {option} para continuar - VERIFICAR"
+                exit 0
+                break
+                fi
+
+	;;
+	5)
+		if [ -z $5 ]; then
+                echo "Se necesita el siguiente Valor {critical value} para continuar - VERIFICAR"
+                exit 0
+                break
+                fi
+	;;
+	
+esac
+done 
+
+case $opt in
+	
+	"E")
+		PGPASSWORD=Mboroti01 /usr/bin/psql -p $3 -U nagios -d $2 -h $1 -c "select count (*) as bloqueos FROM pg_stat_activity WHERE wait_event IS NOT NULL;" > $tmp
+		if [ $(cat $tmp|grep "FATAL"|wc -l) -eq 1 ]; then
+		q=$(head -1 $tmp)
+		echo "$q"
+		exit 2
+		else
+		a=$(cat $tmp|sed '1,2d'|grep -v row|sed '$d'|awk {'print $1'})
+		if [ -z $6 ]; then
+			if [ $a -gt $5 ]; then
+                        echo "[CRI] Existen Usuarios esperando por bloqueo en la DB $2 que excenden la cantidad permitida - Cantidad: $a"
+                        exit 2
+                        else
+                        echo "[OK] No existen Usuarios esperando por bloqueo en la DB $2 - Cantidad: $a"
+                        exit 0
+                	fi
+		else
+		if [ $a -lt $6 ]; then
+			echo "[OK] No existen Usuarios esperando por bloqueo en la DB $2 - Cantidad: $a"
+			exit 0
+		elif [ $a -gt $6 ] && [ $a -lt $5 ]; then
+			echo "[WRN] Existen Usuarios esperando por bloqueo en la DB $2 - Cantidad: $a"
+			exit 1
+		elif [ $a -gt $5 ]; then
+			echo "[CRI] Existen Usuarios esperando por bloqueo en la DB $2 que excenden la cantidad permitida - Cantidad: $a"
+			exit 2
+		fi
+		fi
+		fi
+	;;
+	"G")
+		PGPASSWORD=Mboroti01 /usr/bin/psql -p $3 -U nagios -d $2 -h $1 -c "select count (*) as bloqueos from (select blocking.pid, pg_stat_activity.usename from pg_locks as blocking join (select transactionid from pg_locks where not granted) as blocked on (blocking.transactionid = blocked.transactionid) join pg_stat_activity on (blocking.pid = pg_stat_activity.pid) where blocking.granted union all select blocking.pid, pg_stat_activity.usename from pg_locks as blocking join ( select database, relation, mode from pg_locks where not granted and relation is not null) as blocked on (blocking.database = blocked.database and blocking.relation = blocked.relation) join pg_stat_activity on (blocking.pid = pg_stat_activity.pid) where blocking.granted) as sq;" > $tmp
+		if [ $(cat $tmp|grep "FATAL"|wc -l) -eq 1 ]; then
+                q=$(head -1 $tmp)
+                echo "$q"
+                exit 2
+                else
+		a=$(cat $tmp|sed '1,2d'|grep -v row|sed '$d'|awk {'print $1'})
+		if [ -z $6 ]; then
+			if [ $a -gt $5 ]; then
+			echo "[CRI] Existen Usuarios generando bloqueos en la DB $2 que excenden la cantidad permitida - Cantidad: $a"
+                        exit 2
+			else
+			echo "[OK] No existen Usuarios generando bloqueos en la DB $2 - Cantidad: $a"
+                        exit 0
+			fi
+		else
+		if [ $a -lt $6 ]; then
+                        echo "[OK] No existen Usuarios generando bloqueos en la DB $2 - Cantidad: $a"
+                        exit 0
+                elif [ $a -gt $6 ] && [ $a -lt $5 ]; then
+                        echo "[WRN] Existen algunos Usuarios generando bloqueos en la DB $2 - Cantidad: $a"
+                        exit 1
+                elif [ $a -gt $5 ]; then
+                        echo "[CRI] Existen Usuarios generando bloqueos en la DB $2 que excenden la cantidad permitida - Cantidad: $a"
+                        exit 2
+                fi
+		fi
+		fi
+	;;
+	*)
+		echo "UNKNOW - VALOR DE OPCION INTRODUCIDO INCORRECTAMENTE - OPCIONES({e}speran/{g}eneran)"
+		exit 2
+	;;
+esac
+rm -rf $tmp

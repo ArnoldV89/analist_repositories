@@ -1,0 +1,19 @@
+#!/bin/bash
+#####################################################################################
+#
+# Script      : check_jboss
+# Autor       : Eduardo Appleyard
+# Comentarios : Creado para verificar el stado del jboss
+# Modificacion: Ultima modificacion el 07/10/2015 
+#####################################################################################
+INSTANCIA=$1
+CONSULTA=$(service $INSTANCIA status)
+ESTADO=$(echo $CONSULTA | awk '{print $3}')
+if [ "$ESTADO" == "running" ]
+then 
+	echo "OK - $CONSULTA"
+        exit 0
+else 
+	echo "CRITICAL - $CONSULTA"
+    	exit 2
+fi

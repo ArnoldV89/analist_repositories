@@ -1,0 +1,88 @@
+#!/bin/bash
+#################################################################################
+## Nagios plug-in for controller process in localhost
+## (c) 2018 Analistas de Producción. All rights reserved.
+#################################################################################
+## Especificación del proceso
+## Autor: Arnaldo Aranda
+## Creation Date: 29/06/2018
+## Last Modificación: /07/2018
+## About this plug-in:
+## define command{
+##     command_name    check_process_thread
+##     command_line    $USER1$/check_process_thread $1 $2 $3 $4 $5 $6
+## }
+## Comments:
+##
+##
+##
+##
+#$1 {pattern}     ==> Pattern for search
+#$2 {minimal|maximun process}  ==> Minimal|Maximun numbers of process
+####################################################################################
+opt=$(echo $4| awk '{print toupper($0)}')
+if [ $1 = "-H" ] || [ $1 = "-h" ]; then
+        echo -e "=============================================================\nAbout this plug-in:\ncommand_name: check_process_thread\nNagios plug-in for Controller process in localhost.\n(c) 2018 Analistas de Producción. All rights reserved.\ncommand_line: /check_process_thread 1$ 2$ 3$\n=============================================================\n1$ {pattern}     ==> Pattern for search\n2$ {minimal|maximun process}  ==> Minimal|Maximun numbers of process\n=============================================================\nImportante!\nSi se especificara el patron minimun|maximun se utiliza para mas de un proceso\nen caso de solo verificar un proceso no es necesario pasar el parametro\n============================================================="
+exit 0
+fi
+
+search_pattern() {
+    if [ $n -eq 0 ]; then
+        echo "[CRI] No existen procesos corriendo bajo el patron [$1]"
+        exit 2
+    else
+        echo "[OK] Proceso corriendo para el patron [$1]"
+        exit 0
+    fi
+}
+
+calculate() {
+    if [ $n -eq 0 ]; then
+        rt="CRI"
+        msg="No existen"
+        ex=2
+    elif [ $n -le $v1 ]; then
+        rt="OK"
+        msg=""
+        ex=0
+    elif [ $n -ge $v1 ] && [ $n -lt $v2 ] ; then
+        rt="WARN"
+        msg="Existen"
+        ex=1
+    elif [ $n -gt $v2 ]; then
+        rt="CRI"
+        msg="Existen"
+        ex=2
+    fi
+        echo "[$rt] $msg procesos corriendo bajo el patron [$1] [ Current Process running: $n ]"
+        exit $ex
+}
+
+search_all() {
+    pss=1
+    if [ "`echo $2 | cut -c 1|egrep ^[[:digit:]]+$`" = "" ]; then
+        echo "[ERR] Valor introducido no es numerico > $3 - Example 1:3"
+        pss=0
+    elif [ "`echo $2 | cut -c 3|egrep ^[[:digit:]]+$`" = "" ] && [ $pss -gt 0 ] ; then
+        echo "[ERR] Valor introducido no es numerico > $3 - Example 1:3"
+    else
+        v1=$(echo $2|cut -c 1)
+        v2=$(echo $2|cut -c 3)
+        calculate $1 $v1 $v2
+    fi
+
+}
+
+if [ -z $1 ]; then
+echo "Se necesita el siguiente Valor {pattern} para continuar - VERIFICAR"
+exit 2
+break
+else
+    n=$(ps -fea|grep -E "$1"|grep -v $USER|wc -l)
+fi
+
+if [ -z $2 ] ; then
+    search_pattern $1
+else
+    search_all $1 $2
+fi
